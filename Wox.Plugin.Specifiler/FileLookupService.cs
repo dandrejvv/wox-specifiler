@@ -55,7 +55,20 @@ namespace Wox.Plugin.Specifiler
                             {
                                 try
                                 {
-                                    Process.Start(file.OriginalFilePath);
+                                    if (Path.GetExtension(file.OriginalFilePath) == ".ps1")
+                                    {
+                                        var procInfo = new ProcessStartInfo
+                                        {
+                                            FileName = "Powershell.exe",
+                                            Arguments = file.OriginalFilePath,
+                                            WorkingDirectory = Path.GetDirectoryName(file.OriginalFilePath)
+                                        };
+                                        Process.Start(procInfo);
+                                    }
+                                    else
+                                    {
+                                        Process.Start(file.OriginalFilePath);
+                                    }
                                 }
                                 catch (Exception ex)
                                 {
