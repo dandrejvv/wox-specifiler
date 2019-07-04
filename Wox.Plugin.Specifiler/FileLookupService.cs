@@ -98,13 +98,22 @@ namespace Wox.Plugin.Specifiler
 
                 _cachedFiles.Clear();
 
+                List<string> extensions = _settings.Extensions;
+                if (extensions == null || extensions.Count == 0)
+                {
+                    extensions = new List<string> { "*.*" };
+                }
+
                 foreach (var folderLink in _settings.FolderLinks)
                 {
-                    _cachedFiles.AddRange(Directory.GetFiles(
-                            folderLink.Path, 
-                            string.Join(";", _settings.Extensions), 
+                    foreach (var ext in extensions)
+                    {
+                        _cachedFiles.AddRange(Directory.GetFiles(
+                            folderLink.Path,
+                            ext,
                             SearchOption.AllDirectories)
                         .Select(s => new FileResult(s)));
+                    }
                 }
             }
 
