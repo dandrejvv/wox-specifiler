@@ -134,7 +134,7 @@ namespace Wox.Plugin.Specifiler
 
         private void BtnApplyExt_Click(object sender, RoutedEventArgs e)
         {
-            var extensions = txtExtensions.Text.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries).ToList();
+            var extensions = txtExtensions.Text.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()).Where(p => p != "*.*").ToList();
             foreach(var ext in extensions)
             {
                 if (!Regex.IsMatch(ext, "\\*\\.[a-z]+"))
