@@ -1,0 +1,12 @@
+﻿{
+  "ID": "c3044ea102054f37bcd860d7d392cd94",
+  "ActionKeyword": "*",
+  "Name": "Specifiler",
+  "Description": "Lookup specific files for regular access",
+  "Author": "Dandré Jansen van Vuuren",
+  "Version": "1.0.0",
+  "Language": "csharp",
+  "Website": "",
+  "IcoPath": "Images\\copy.png",
+  "ExecuteFileName": "Wox.Plugin.Specifiler.dll"
+}
