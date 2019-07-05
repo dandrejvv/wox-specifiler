@@ -17,9 +17,9 @@ namespace Wox.Plugin.Specifiler
         private PluginInitContext _context;
         private readonly Settings _settings;
         private readonly PluginJsonStorage<Settings> _storage;
-        private readonly List<FileResult> _cachedFiles = new List<FileResult>();
+        private List<FileResult> _cachedFiles = new List<FileResult>();
         private DateTime _cacheExpiry = DateTime.Now;
-        private volatile bool _isReady;
+        private object _lock = new object();
 
         public FileLookupService()
         {
@@ -30,7 +30,7 @@ namespace Wox.Plugin.Specifiler
         public void Init(PluginInitContext context)
         {
             _context = context;
-            Task.Run(() => PrepareFileCache());
+            PrepareFileCache();
         }
 
         public List<Result> Query(Query query)
@@ -40,52 +40,41 @@ namespace Wox.Plugin.Specifiler
 
             if (!string.IsNullOrWhiteSpace(search))
             {
-                if (_isReady)
-                {
-                    PrepareFileCache();
+                PrepareFileCache();
 
-                    foreach (var file in FilterFilesFromCache(search))
-                    {
-                        results.Add(new Result
-                        {
-                            Title = file.FileName,
-                            SubTitle = file.OriginalFilePath,
-                            IcoPath = ImagePath,
-                            Action = c =>
-                            {
-                                try
-                                {
-                                    if (Path.GetExtension(file.OriginalFilePath) == ".ps1")
-                                    {
-                                        var procInfo = new ProcessStartInfo
-                                        {
-                                            FileName = "Powershell.exe",
-                                            Arguments = file.OriginalFilePath,
-                                            WorkingDirectory = Path.GetDirectoryName(file.OriginalFilePath)
-                                        };
-                                        Process.Start(procInfo);
-                                    }
-                                    else
-                                    {
-                                        Process.Start(file.OriginalFilePath);
-                                    }
-                                }
-                                catch (Exception ex)
-                                {
-                                    MessageBox.Show(ex.Message, "Could not open " + file);
-                                }
-
-                                return true;
-                            }
-                        });
-                    }
-                }
-                else
+                foreach (var file in FilterFilesFromCache(search))
                 {
                     results.Add(new Result
                     {
-                        Title = "Specifiler not ready",
-                        IcoPath = ImagePath
+                        Title = file.FileName,
+                        SubTitle = file.OriginalFilePath,
+                        IcoPath = ImagePath,
+                        Action = c =>
+                        {
+                            try
+                            {
+                                if (Path.GetExtension(file.OriginalFilePath) == ".ps1")
+                                {
+                                    var procInfo = new ProcessStartInfo
+                                    {
+                                        FileName = "Powershell.exe",
+                                        Arguments = file.OriginalFilePath,
+                                        WorkingDirectory = Path.GetDirectoryName(file.OriginalFilePath)
+                                    };
+                                    Process.Start(procInfo);
+                                }
+                                else
+                                {
+                                    Process.Start(file.OriginalFilePath);
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                MessageBox.Show(ex.Message, "Could not open " + file);
+                            }
+
+                            return true;
+                        }
                     });
                 }
             }
@@ -107,34 +96,39 @@ namespace Wox.Plugin.Specifiler
         {
             if (_cacheExpiry < DateTime.Now)
             {
-                _cacheExpiry = DateTime.Now.AddMinutes(1);
-
-                _cachedFiles.Clear();
-
-                var allowAll = _settings.Extensions == null || _settings.Extensions.Count == 0;
-                var extensionLookup = new HashSet<string>(_settings.Extensions.Select(s => s.Replace("*", string.Empty)));
-
-                foreach (var folderLink in _settings.FolderLinks)
+                Task.Run(() => 
                 {
-                    _cachedFiles.AddRange(Directory.GetFiles(
-                            folderLink.Path,
-                            "*.*",
-                            SearchOption.AllDirectories)
-                        .Where(p => allowAll || extensionLookup.Contains(Path.GetExtension(p)?.ToLower()))
-                        .Select(s => new FileResult(s)));
-                }
-            }
+                    _cacheExpiry = DateTime.Now.AddMinutes(1);
 
-            _isReady = true;
+                    var refreshList = new List<FileResult>();
+
+                    var allowAll = _settings.Extensions == null || _settings.Extensions.Count == 0;
+                    var extensionLookup = new HashSet<string>(_settings.Extensions.Select(s => s.Replace("*", string.Empty)));
+
+                    foreach (var folderLink in _settings.FolderLinks)
+                    {
+                        refreshList.AddRange(Directory.GetFiles(
+                                folderLink.Path,
+                                "*.*",
+                                SearchOption.AllDirectories)
+                            .Where(p => allowAll || extensionLookup.Contains(Path.GetExtension(p)?.ToLower()))
+                            .Select(s => new FileResult(s)));
+                    }
+
+                    lock(_lock)
+                    {
+                        _cachedFiles = refreshList;
+                    }
+                });
+            }
         }
 
         private IReadOnlyCollection<FileResult> FilterFilesFromCache(string search)
         {
-            if (!_isReady)
+            lock (_lock)
             {
-                return new List<FileResult>();
+                return _cachedFiles.Where(p => p.SearchText.Contains(search)).ToList();
             }
-            return _cachedFiles.Where(p => p.SearchText.StartsWith(search)).ToList();
         }
     }
 }
